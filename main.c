@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <inttypes.h>
-#include <stdbool.h>
+#include <stdint.h>
+#include <malloc.h>
 
 struct __attribute__((packed)) file_header {
     uint16_t machine;
@@ -43,7 +44,7 @@ struct __attribute__((packed)) optional_header {
     uint32_t size_of_heap_commit;
     uint32_t loader_flags;
     uint32_t number_of_rva_and_sizes;
-    uint64_t data_directories[15];
+    uint64_t data_directories[16];
 };
 
 struct __attribute__((packed)) pe_header {
@@ -65,22 +66,52 @@ struct __attribute__((packed)) section_table {
     uint32_t characteristics;
 };
 
-struct __attribute__((packed)) header {
-    uint64_t dos_header[8];
-    uint64_t dos_stub[25];
-    struct pe_header peHeader;
-    struct section_table* sectionTable;
-};
-
-bool get_header(FILE* file, struct header* header) {
-    return fread(header, sizeof(struct header), 1, file);
+void save_section_info(struct section_table* section, int section_index, FILE* file) {
+    fprintf(file, "%d\n", section_index);
+    fprintf(file,"name: %s\n", section->name);
+    fprintf(file,"virtual_size: %" PRIu32 "\n", section->virtual_size);
+    fprintf(file,"virtual_address: %" PRIu32 "\n", section->virtual_address);
+    fprintf(file,"size_of_raw_data: %" PRIu32 "\n", section->size_of_raw_data);
+    fprintf(file,"pointer_to_raw_data: %" PRIu32 "\n", section->pointer_to_raw_data);
+    fprintf(file,"pointer_to_relocations: %" PRIu32 "\n", section->pointer_to_relocations);
+    fprintf(file,"pointer_to_line_numbers: %" PRIu32 "\n", section->pointer_to_line_numbers);
+    fprintf(file,"number_of_relocations: %" PRIu32 "\n", section->number_of_relocations);
+    fprintf(file,"number_of_line_numbers: %" PRIu32 "\n", section->number_of_line_numbers);
+    fprintf(file,"characteristics: %" PRIu32 "\n\n", section->characteristics);
 }
 
 int main() {
-    FILE* file = fopen("example.exe", "rb");
-    struct header file_header = { 0 };
-    get_header(file, &file_header);
-    fclose(file);
+    char filename[20];
+    scanf("%s", filename);
+    printf("\n");
 
+    FILE* file = fopen(filename, "rb");
+    FILE* text_file = fopen("sections.txt", "wt");
+    FILE* bin_file = fopen("program.bin", "wb");
+
+    uint64_t dos_start[16];
+    fread(dos_start, sizeof(uint64_t) * 16, 1, file);
+
+    struct pe_header peHeader = { 0 };
+    fread(&peHeader, sizeof(struct pe_header), 1, file);
+
+    struct section_table* sections = malloc(sizeof(struct section_table) * peHeader.fileHeader.numOfSections);
+
+    for (uint16_t i = 0; i < peHeader.fileHeader.numOfSections; i++) {
+        fread(sections + i, sizeof(struct section_table), 1, file);
+        save_section_info(sections + i, i, text_file);
+    }
+    fseek(file, peHeader.optionalHeader.base_of_code, SEEK_SET);
+    uint8_t* code = malloc(sizeof(uint8_t) * peHeader.optionalHeader.size_of_code);
+    fread(code, peHeader.optionalHeader.size_of_code, 1, file);
+    fwrite(code, peHeader.optionalHeader.size_of_code, 1, bin_file);
+
+    free(code);
+    free(sections);
+
+
+    fclose(file);
+    fclose(text_file);
+    fclose(bin_file);
     return 0;
 }

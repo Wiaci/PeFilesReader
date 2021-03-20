@@ -6,9 +6,13 @@
 
 #IncludeRegexTransform: 
 
-C:/untitled1/main.c
+C:/Users/1/Desktop/PeFilesReader/main.c
 stdio.h
 -
 inttypes.h
+-
+stdint.h
+-
+malloc.h
 -
 
